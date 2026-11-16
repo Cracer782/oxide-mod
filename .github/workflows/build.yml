@@ -1,29 +1,57 @@
 name: Build Android .so
 
-on: [push]
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [ arm64-v8a, armeabi-v7a ]
+
     steps:
-  - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-  - name: Set up Android NDK
-    uses: nttld/setup-ndk@v1
-    with:
-      ndk-version: r23b
-      android-version: 29
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+          add-to-path: true
 
-  - name: Build with CMake
-    run: |
-      mkdir build && cd build
-      cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=arm64-v8a \
-            -DANDROID_PLATFORM=android-21 ..
-      make
+      - name: Export NDK env
+        run: echo "ANDROID_NDK=$ANDROID_NDK_HOME" >> $GITHUB_ENV
 
-  - name: Upload Artifact
-    uses: actions/upload-artifact@v3
-    with:
-      name: modmenu-so
-      path: build/libmodmenu.so
+      - name: Configure
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DANDROID_STL=c++_static \
+            -DCMAKE_CXX_FLAGS="-O2 -fvisibility=hidden -fvisibility-inlines-hidden -s"
+
+      - name: Build
+        run: cmake --build build --config Release -j$(nproc)
+
+      - name: Verify
+        run: |
+          test -f build/libmodmenu.so || { echo "not found"; exit 1; }
+          file build/libmodmenu.so
+          ls -la build/libmodmenu.so
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: modmenu-so-${{ matrix.abi }}
+          path: build/libmodmenu.so
+          if-no-files-found: error
+          retention-days: 14
