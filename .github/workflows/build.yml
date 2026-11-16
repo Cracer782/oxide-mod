@@ -3,6 +3,7 @@ name: Build Android .so
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 concurrency:
@@ -12,6 +13,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -19,6 +21,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Sanity check
+        run: |
+          test -f CMakeLists.txt || { echo "CMakeLists.txt missing"; exit 1; }
+          test -f main.cpp || { echo "main.cpp missing"; exit 1; }
+
+      - name: Cache NDK
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.ANDROID_NDK_HOME }}
+          key: ndk-r25c-linux
 
       - name: Set up Android NDK
         uses: nttld/setup-ndk@v1
@@ -29,12 +42,23 @@ jobs:
       - name: Export NDK env
         run: echo "ANDROID_NDK=$ANDROID_NDK_HOME" >> $GITHUB_ENV
 
+      - name: Fetch ImGui
+        run: |
+          git clone --depth 1 --branch v1.90.9 https://github.com/ocornut/imgui.git _imgui
+          mkdir -p imgui
+          cp _imgui/imgui.cpp _imgui/imgui_draw.cpp _imgui/imgui_tables.cpp _imgui/imgui_widgets.cpp imgui/
+          cp _imgui/imgui.h _imgui/imgui_internal.h _imgui/imconfig.h _imgui/imstb_*.h imgui/
+          cp _imgui/backends/imgui_impl_opengl3.cpp _imgui/backends/imgui_impl_opengl3.h _imgui/backends/imgui_impl_opengl3_loader.h imgui/
+          cp _imgui/backends/imgui_impl_android.cpp _imgui/backends/imgui_impl_android.h imgui/
+          rm -rf _imgui
+
       - name: Configure
         run: |
-          cmake -S . -B build \
+          cmake -S . -B build --log-level=WARNING \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=${{ matrix.abi }} \
             -DANDROID_PLATFORM=android-21 \
+            -DANDROID_TOOLCHAIN=clang \
             -DCMAKE_BUILD_TYPE=Release \
             -DANDROID_STL=c++_static \
             -DCMAKE_CXX_FLAGS="-O2 -fvisibility=hidden -fvisibility-inlines-hidden -s"
@@ -44,14 +68,21 @@ jobs:
 
       - name: Verify
         run: |
-          test -f build/libmodmenu.so || { echo "not found"; exit 1; }
-          file build/libmodmenu.so
-          ls -la build/libmodmenu.so
+          test -f build/libiptade.so || { echo "libiptade.so not found"; exit 1; }
+          file build/libiptade.so
+          ls -la build/libiptade.so
+
+      - name: Verify JNI_OnLoad export
+        run: |
+          $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm \
+            -D build/libiptade.so | grep -q "JNI_OnLoad" \
+            || { echo "JNI_OnLoad NOT exported!"; exit 1; }
+          echo "JNI_OnLoad exported OK"
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: modmenu-so-${{ matrix.abi }}
-          path: build/libmodmenu.so
+          name: iptade-so-${{ matrix.abi }}
+          path: build/libiptade.so
           if-no-files-found: error
           retention-days: 14
