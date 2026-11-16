@@ -27,12 +27,6 @@ jobs:
           test -f CMakeLists.txt || { echo "CMakeLists.txt missing"; exit 1; }
           test -f main.cpp || { echo "main.cpp missing"; exit 1; }
 
-      - name: Cache NDK
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.ANDROID_NDK_HOME }}
-          key: ndk-r25c-linux
-
       - name: Set up Android NDK
         uses: nttld/setup-ndk@v1
         with:
@@ -65,6 +59,16 @@ jobs:
 
       - name: Build
         run: cmake --build build --config Release -j$(nproc)
+
+      - name: Find and Fix Library Name
+        run: |
+          FOUND_SO=$(find build -name "*.so" | head -n 1)
+          if [ -z "$FOUND_SO" ]; then
+            echo "No .so file found!"
+            exit 1
+          fi
+          echo "Found library: $FOUND_SO"
+          mv "$FOUND_SO" build/libiptade.so
 
       - name: Verify
         run: |
