@@ -42,8 +42,9 @@ jobs:
           mkdir -p imgui
           cp _imgui/imgui.cpp _imgui/imgui_draw.cpp _imgui/imgui_tables.cpp _imgui/imgui_widgets.cpp imgui/
           cp _imgui/imgui.h _imgui/imgui_internal.h _imgui/imconfig.h _imgui/imstb_*.h imgui/
-          cp _imgui/backends/imgui_impl_opengl3.cpp _imgui/backends/imgui_impl_opengl3.h _imgui/backends/imgui_impl_opengl3_loader.h imgui/
           cp _imgui/backends/imgui_impl_android.cpp _imgui/backends/imgui_impl_android.h imgui/
+          # ДОБАВЛЕНО: Файлы для Vulkan
+          cp _imgui/backends/imgui_impl_vulkan.cpp _imgui/backends/imgui_impl_vulkan.h imgui/
           rm -rf _imgui
 
       - name: Configure
@@ -51,7 +52,7 @@ jobs:
           cmake -S . -B build --log-level=WARNING \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
             -DANDROID_ABI=${{ matrix.abi }} \
-            -DANDROID_PLATFORM=android-21 \
+            -DANDROID_PLATFORM=android-24 \
             -DANDROID_TOOLCHAIN=clang \
             -DCMAKE_BUILD_TYPE=Release \
             -DANDROID_STL=c++_static \
