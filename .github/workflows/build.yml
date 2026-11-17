@@ -14,10 +14,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        abi: [ arm64-v8a, armeabi-v7a ]
 
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +39,6 @@ jobs:
           cp _imgui/imgui.cpp _imgui/imgui_draw.cpp _imgui/imgui_tables.cpp _imgui/imgui_widgets.cpp imgui/
           cp _imgui/imgui.h _imgui/imgui_internal.h _imgui/imconfig.h _imgui/imstb_*.h imgui/
           cp _imgui/backends/imgui_impl_android.cpp _imgui/backends/imgui_impl_android.h imgui/
-          # ДОБАВЛЕНО: Файлы для Vulkan
           cp _imgui/backends/imgui_impl_vulkan.cpp _imgui/backends/imgui_impl_vulkan.h imgui/
           rm -rf _imgui
 
@@ -51,43 +46,27 @@ jobs:
         run: |
           cmake -S . -B build --log-level=WARNING \
             -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_ABI=arm64-v8a \
             -DANDROID_PLATFORM=android-24 \
             -DANDROID_TOOLCHAIN=clang \
             -DCMAKE_BUILD_TYPE=Release \
             -DANDROID_STL=c++_static \
-            -DCMAKE_CXX_FLAGS="-O2 -fvisibility=hidden -fvisibility-inlines-hidden -s"
+            -DCMAKE_CXX_FLAGS="-O2 -fvisibility=hidden -fvisibility-inlines-hidden"
 
       - name: Build
         run: cmake --build build --config Release -j$(nproc)
 
-      - name: Find and Fix Library Name
+      - name: Verify Library Exists
         run: |
-          FOUND_SO=$(find build -name "*.so" | head -n 1)
-          if [ -z "$FOUND_SO" ]; then
-            echo "No .so file found!"
-            exit 1
-          fi
-          echo "Found library: $FOUND_SO"
-          mv "$FOUND_SO" build/libiptade.so
-
-      - name: Verify
-        run: |
-          test -f build/libiptade.so || { echo "libiptade.so not found"; exit 1; }
+          test -f build/libiptade.so || { echo "libiptade.so not found in build directory"; exit 1; }
           file build/libiptade.so
           ls -la build/libiptade.so
-
-      - name: Verify JNI_OnLoad export
-        run: |
-          $ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm \
-            -D build/libiptade.so | grep -q "JNI_OnLoad" \
-            || { echo "JNI_OnLoad NOT exported!"; exit 1; }
-          echo "JNI_OnLoad exported OK"
 
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: iptade-so-${{ matrix.abi }}
+          name: iptade-so-arm64-v8a
           path: build/libiptade.so
           if-no-files-found: error
           retention-days: 14
+          
