@@ -230,7 +230,9 @@ void SetupImGui() {
     init_info.ImageCount = g_SwapchainImages.size();
     init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
     ImGui_ImplAndroid_Init(nullptr);
-    ImGui_ImplVulkan_Init(&init_info, g_RenderPass);
+    init_info.RenderPass = g_RenderPass;
+ImGui_ImplVulkan_Init(&init_info);
+    
 
     g_Initialized = true;
     LOGI("[+] ImGui Vulkan initialized!");
